@@ -27,7 +27,6 @@ for i = (1:1: length(t0s_dictionary)) % Para cada estimulo
     
     % Seteo contador de spikes en cero
     score_aux = 0;
-    noise_aux = 0;
     
     % Sumo los spikes de cada trial
     for k = (1:1:length(t0s_aux)) % Para cada trial
@@ -37,13 +36,9 @@ for i = (1:1: length(t0s_dictionary)) % Para cada estimulo
         % Sumo spikes que ocurren durante la presentacion del estimulo
         score_aux = score_aux + sum(spike_times > t & ...
             spike_times < t + song_len * frequency_parameters.amplifier_sample_rate);
-        
-        % Sumo spikes que ocurren despues de la presentacion del estimulo
-        noise_aux = noise_aux + sum(spike_times > t + song_len * frequency_parameters.amplifier_sample_rate & ...
-            spike_times < t + 2 * song_len * frequency_parameters.amplifier_sample_rate);   
     end
     
-    score_dict(i).score = score_aux - noise_aux;
+    score_dict(i).score = score_aux;
     
 end
 
