@@ -1,46 +1,67 @@
-function score_dict = score_calculator(spike_times, t0s_dictionary, estimulos, frequency_parameters);
+function dict_score = score_calculator(id_BOS, estimulos, rasters, frequency_parameters)
+% Calcula la int_normalizada y la correlacion del protocolo experimental
+%   
+%   Entradas:
+% 
+%   Salidas:
+%   dict_score = (struct)
+%   dict_score.name = (string) nombre del estimulo
+%   dict_score.int_norm = (double) integral de spikes durante la
+%   presentacion del estimulo restandole la actividad espontanea y
+%   estandarizando por la inetegral de spikes del BOS.
+%   dict_score.corr = (double) correlacion de pearson de la slinding window
+%   del estimulo con la sliding window del BOS
 
-% Calcula el score para cada estimulo
-% El score es la suma total de spikes durante la persentación del estímulo
-% menos la señal de ruido
+t_window = 0.015; % 15 ms
+step = 0.001; % 1 ms
 
-score_dict = struct();
+% Calculo la sw del BOS para poder hacer correlaciones con el resto
+[sw_data_BOS, sw_times_BOS] = sliding_window(rasters(id_BOS).spikes_norm, frequency_parameters.amplifier_sample_rate, ...
+        t_window, step);
+    
+% Conservo solo la seccion donde se presenta el estimulo auditivo
+duracion_BOS = length(estimulos(id_BOS).song) / estimulos(id_BOS).freq; % en seg
+sw_data_BOS = sw_data_BOS(sw_times_BOS < duracion_BOS);
+sw_data_BOS_norm = sw_data_BOS / max(sw_data_BOS);
 
-for i = (1:1: length(t0s_dictionary)) % Para cada estimulo
+% Calculo integracion de spikes normalizada del BOS para poder estandarizar
+% el resto
+integral = sum(rasters(id_BOS).spikes_norm < duracion_BOS * frequency_parameters.amplifier_sample_rate);
+ruido    = sum(rasters(id_BOS).spikes_norm > duracion_BOS * frequency_parameters.amplifier_sample_rate & ...
+    rasters(id_BOS).spikes_norm < duracion_BOS * 2 * frequency_parameters.amplifier_sample_rate); 
+integral_norm_BOS = integral - ruido;
+
+dict_score = struct;
+
+for i = (1:1:length(estimulos)) % para cada estímulo
     
     % Guardo el nombre del estimulo
-    score_dict(i).name = t0s_dictionary(i).id_estimulo;
-    
-    % Busco la frecuencia de sampleo de este estimulo
-    for j = (1:1: length(estimulos)) % Para cada estimulo
-        if score_dict(i).name  == estimulos(j).name
-            index_song = j;
-        end
-    end
+    id_estimulo = estimulos(i).name;
     
     % Guardo la frecuencia de sampleo y el largo (en seg) de este estimulo
-    song_freq = estimulos(index_song).freq;
-    song_len = length(estimulos(index_song).song) / song_freq; % unidades: seg
+    song_freq = estimulos(i).freq;
+    song_len = length(estimulos(i).song) / song_freq; % unidades: seg
     
-    % Separo los t0s del estimulo
-    t0s_aux = t0s_dictionary(i).t0s;
+    % Integracion de spikes normalizada
+    integral = sum(rasters(i).spikes_norm < song_len * frequency_parameters.amplifier_sample_rate);
+    ruido    = sum(rasters(i).spikes_norm > song_len * frequency_parameters.amplifier_sample_rate & ...
+        rasters(i).spikes_norm < song_len * 2 * frequency_parameters.amplifier_sample_rate); 
+    integral_norm = (integral - ruido)/integral_norm_BOS;
     
-    % Seteo contador de spikes en cero
-    score_aux = 0;
+    % Calculo sliding window
+    [sw_data, sw_times] = sliding_window(rasters(i).spikes_norm, frequency_parameters.amplifier_sample_rate, ...
+        t_window, step);
     
-    % Sumo los spikes de cada trial
-    for k = (1:1:length(t0s_aux)) % Para cada trial
-        
-        t = t0s_aux(k);
-        
-        % Sumo spikes que ocurren durante la presentacion del estimulo
-        score_aux = score_aux + sum(spike_times > t & ...
-            spike_times < t + song_len * frequency_parameters.amplifier_sample_rate);
-    end
+    % Calculo correlación de sw normalizada con la sw normalizada del BOS
+    sw_data_norm = sw_data / max(sw_data);
+    sw_data_norm = sw_data_norm(sw_times < duracion_BOS);
+    correlacion_pearson = corrcoef(sw_data_norm, sw_data_BOS_norm);
     
-    score_dict(i).score = score_aux;
-    
-end
+    % Guardo resultados
+    dict_score(i).name = id_estimulo;
+    dict_score(i).int_norm = integral_norm;
+    dict_score(i).corr = correlacion_pearson(1,2);
+end 
 
 end
 
